@@ -1,0 +1,9 @@
+venv/
+.venv/
+__pycache__/
+*.pyc
+batteryLevel.txt
+anomalyEvents.txt
+offline_tags.txt
+offline_tags.txt.tmp
+E9_Battery_Monitoring_centos8.zip
