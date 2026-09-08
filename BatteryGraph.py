@@ -11,6 +11,7 @@ from socketserver import ThreadingMixIn
 import paho.mqtt.client as mqtt
 
 from Battery import battery_percent
+from credentials import load_credentials
 
 BROKER, PORT, TOPIC = "ra-net.contigo.com", 7008, "/cell/#"
 WEB_HOST = os.environ.get("E9_WEB_HOST", "127.0.0.1")
@@ -750,7 +751,8 @@ def run(cfc_ids=None, open_browser=False):
         except Exception as exc:
             print(f"Could not open browser: {exc}")
     client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
-    client.username_pw_set("contigo", "C0nt1g0")
+    user, password = load_credentials()
+    client.username_pw_set(user, password)
     client.on_connect = on_connect
     client.on_message = on_message
     try:
