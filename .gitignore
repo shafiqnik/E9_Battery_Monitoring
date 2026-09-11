@@ -2,8 +2,12 @@ venv/
 .venv/
 __pycache__/
 *.pyc
-batteryLevel.txt
-anomalyEvents.txt
-offline_tags.txt
-offline_tags.txt.tmp
+*.txt
+!requirements.txt
 E9_Battery_Monitoring_centos8.zip
+E9_Battery_Monitoring.tar.gz
+disconnection_ads.jsonl
+disconnection_labels.jsonl
+disconnection_outcomes.jsonl
+disconnection_metrics.json
+disconnection_model.pkl
