@@ -3,14 +3,14 @@ import os
 CREDENTIALS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "credentials.txt")
 
 DEFAULTS = {
-    "username": "contigo",
-    "password": "C0nt1g0",
-    "broker": "ra-net.contigo.com",
-    "port": "7008",
+    "username": "co",
+    "password": "Cg0",
+    "broker": "rom",
+    "port": "18838",
     "topic": "/cell/#",
-    "esn": "30AE7BE844CF",
-    "vecima": "564543494D41",
-    "header": "E1FFA1",
+    "esn": "344CF",
+    "vecima": "564D41",
+    "header": "EA1",
 }
 
 _ALIASES = {
