@@ -1,5 +1,8 @@
-VECIMA = "564543494D41"
-HEADER = bytes.fromhex("E1FFA1")
+from credentials import load_config
+
+_cfg = load_config()
+VECIMA = _cfg.vecima
+HEADER = _cfg.header_bytes
 
 
 def parse_e9_battery(data_hex, modelstr=None):

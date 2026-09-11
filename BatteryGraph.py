@@ -11,9 +11,11 @@ from socketserver import ThreadingMixIn
 import paho.mqtt.client as mqtt
 
 from Battery import battery_percent
-from credentials import load_credentials
+from credentials import load_config
+from disconnection_predictor import DisconnectionPredictor, ingest_mqtt_payload
 
-BROKER, PORT, TOPIC = "ra-net.contigo.com", 7008, "/cell/#"
+_cfg = load_config()
+BROKER, PORT, TOPIC = _cfg.broker, _cfg.port, _cfg.topic
 WEB_HOST = os.environ.get("E9_WEB_HOST", "127.0.0.1")
 WEB_PORT = int(os.environ.get("E9_WEB_PORT", "8081"))
 LOG = "batteryLevel.txt"
@@ -22,7 +24,7 @@ OFFLINE_LOG = "offline_tags.txt"
 LOW_BATTERY = 64
 ONLINE_SEC = 60
 OFFLINE_MIN_SEC = 60
-ids = (sys.argv[1] if len(sys.argv) > 1 else "30AE7BE844CF").upper().replace(" ", "").replace(":", "").replace("'", "").split(",")
+ids = list(_cfg.ids)
 
 lock = threading.Lock()
 status = "Connecting..."
@@ -36,6 +38,7 @@ anomaly_events = []
 event_keys = set()
 presence = {}
 offline_dirty = False
+predictor = None
 
 HTML = r"""<!DOCTYPE html>
 <html><head><meta charset="utf-8">
@@ -92,6 +95,29 @@ code { font-family: Consolas, monospace; }
     <div class="l">Anomaly Detected</div>
     <div class="hint">click for details</div>
   </div>
+</div>
+<div class="panel">
+  <div class="panel-head">
+    <h2>DISCONNECTION PREDICTION</h2>
+    <div class="clock"><span id="pred-banner">collecting advertisements…</span></div>
+  </div>
+  <p class="meta" id="pred-meta">Live MQTT ads are stored as training data. Each forecast is compared with what actually happened after the horizon. Wrong forecasts update training and retrain; correct ones keep the current model.</p>
+  <div class="cards">
+    <div class="card"><div class="n info" id="pred-ads">0</div><div class="l">Ads collected</div></div>
+    <div class="card"><div class="n warn" id="pred-risk">0</div><div class="l">At risk / likely</div></div>
+    <div class="card"><div class="n ok" id="pred-acc">—</div><div class="l">Rolling accuracy</div></div>
+    <div class="card"><div class="n" id="pred-fit">No</div><div class="l">Suitable model</div></div>
+  </div>
+  <p class="meta" id="pred-train">Model: heuristic until enough labeled dropouts exist.</p>
+  <div class="table-box"><table>
+    <thead><tr><th>ble_addr</th><th>probability</th><th>forecast</th><th>horizon</th><th>top features</th></tr></thead>
+    <tbody id="pred-live"></tbody>
+  </table></div>
+  <h2 style="margin-top:14px">PREDICTED vs ACTUAL</h2>
+  <div class="table-box"><table>
+    <thead><tr><th>when</th><th>ble_addr</th><th>predicted</th><th>actual</th><th>result</th></tr></thead>
+    <tbody id="pred-outcomes"></tbody>
+  </table></div>
 </div>
 <div class="panel" id="anomaly-panel" hidden>
   <div class="panel-head">
@@ -233,6 +259,34 @@ async function refresh(){
     const downNow = t.offline_since !== 'online';
     return '<tr><td><code>'+esc(t.ble_addr)+'</code></td><td class="'+(downNow?'bad':'ok')+'">'+esc(t.offline_since)+'</td><td>'+t.times_over_1min+'</td><td>'+esc(t.how_often)+'</td></tr>';
   }).join('');
+  const pred = d.predict || {};
+  const livePred = pred.live || [];
+  const riskN = livePred.filter(r => r.predicted_status !== 'Normal').length;
+  const fit = !!pred.suitable;
+  document.getElementById('pred-ads').textContent = pred.ads_collected || 0;
+  document.getElementById('pred-risk').textContent = riskN;
+  document.getElementById('pred-acc').textContent = pred.stats && pred.stats.rolling_accuracy != null
+    ? Math.round(pred.stats.rolling_accuracy * 100) + '%' : '—';
+  const fitEl = document.getElementById('pred-fit');
+  fitEl.textContent = fit ? 'Yes' : 'No';
+  fitEl.className = 'n ' + (fit ? 'ok' : 'warn');
+  document.getElementById('pred-banner').textContent =
+    (pred.model || 'heuristic') + (fit ? ' · suitable' : ' · learning') +
+    ' · pending ' + (pred.pending_n || 0);
+  document.getElementById('pred-train').textContent =
+    (pred.last_retrain_reason || '') +
+    (pred.train_message ? ' — ' + pred.train_message : '') +
+    (pred.last_train_at ? ' · last train ' + pred.last_train_at : '') +
+    ' · ' + (pred.horizon || '');
+  document.getElementById('pred-live').innerHTML = livePred.map(r => {
+    const cls = r.predicted_status === 'Normal' ? 'ok' : (r.predicted_status === 'At Risk' ? 'warn' : 'bad');
+    const feats = (r.key_features || []).slice(0,3).map(f => f.feature).join(', ');
+    return '<tr><td><code>'+esc(r.ble_addr)+'</code></td><td class="'+cls+'">'+r.disconnect_probability+'%</td><td class="'+cls+'">'+esc(r.predicted_status)+'</td><td>'+esc(r.prediction_horizon)+'</td><td>'+esc(feats)+'</td></tr>';
+  }).join('') || '<tr><td colspan="5">Collecting advertisements for training…</td></tr>';
+  document.getElementById('pred-outcomes').innerHTML = (pred.outcomes || []).map(o => {
+    const cls = o.correct ? 'ok' : 'bad';
+    return '<tr><td>'+esc(o.when)+'</td><td><code>'+esc(o.ble_addr)+'</code></td><td>'+esc(o.predicted_status)+' ('+o.probability+'%)</td><td>'+esc(o.actual_status)+'</td><td class="'+cls+'">'+(o.correct ? 'correct — model kept' : 'wrong — training updated')+'</td></tr>';
+  }).join('') || '<tr><td colspan="5">Comparisons appear after the prediction horizon elapses.</td></tr>';
   const datasets = d.series.map((s,i) => ({
     label: s.mac,
     data: s.data,
@@ -562,6 +616,17 @@ def load_offline_tags():
             presence[mac] = rec
 
 
+def predictor_loop():
+    while True:
+        time.sleep(5)
+        if predictor is None:
+            continue
+        try:
+            predictor.tick()
+        except Exception as exc:
+            print(f"disconnection predictor: {exc}")
+
+
 def presence_loop():
     global offline_dirty
     while True:
@@ -664,6 +729,7 @@ def snapshot():
             "replacement": sum(1 for e in anomaly_events if e["kind"] == "replacement"),
             "recorded": len(anomaly_events),
         },
+        "predict": predictor.dashboard_state(now) if predictor else {},
     }
 
 
@@ -704,6 +770,10 @@ def on_message(client, userdata, msg):
                     log_battery(mac, data, bat)
             elif model == "Bledevice":
                 note_live(mac, now)
+    ads = ingest_mqtt_payload(parsed, when=now.timestamp())
+    if predictor:
+        for ad in ads:
+            predictor.ingest(ad)
 
 
 class Server(ThreadingMixIn, HTTPServer):
@@ -731,17 +801,23 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def run(cfc_ids=None, open_browser=False):
-    global ids, started
+    global ids, started, predictor
     if cfc_ids:
         ids = cfc_ids
     started = time.monotonic()
     load_anomalies()
     load_log()
     load_offline_tags()
+    predictor = DisconnectionPredictor()
+    n_ads = predictor.load_log()
+    if not predictor.suitable:
+        predictor._needs_retrain = True
+    print(f"Disconnection training ads loaded: {n_ads}")
     url = f"http://127.0.0.1:{WEB_PORT}" if WEB_HOST in ("0.0.0.0", "::") else f"http://{WEB_HOST}:{WEB_PORT}"
     server = Server((WEB_HOST, WEB_PORT), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     threading.Thread(target=presence_loop, daemon=True).start()
+    threading.Thread(target=predictor_loop, daemon=True).start()
     print(f"Battery graph: {url}  (bound {WEB_HOST}:{WEB_PORT})")
     print("CFC filter:", ids)
     if open_browser:
@@ -751,8 +827,7 @@ def run(cfc_ids=None, open_browser=False):
         except Exception as exc:
             print(f"Could not open browser: {exc}")
     client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
-    user, password = load_credentials()
-    client.username_pw_set(user, password)
+    client.username_pw_set(_cfg.username, _cfg.password)
     client.on_connect = on_connect
     client.on_message = on_message
     try:

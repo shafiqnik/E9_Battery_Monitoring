@@ -6,11 +6,12 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import paho.mqtt.client as mqtt
 
 from Battery import battery_percent
-from credentials import load_credentials
+from credentials import load_config, parse_ids
 
-BROKER, PORT, TOPIC = "ra-net.contigo.com", 7008, "/cell/#"
+_cfg = load_config()
+BROKER, PORT, TOPIC = _cfg.broker, _cfg.port, _cfg.topic
 WEB_HOST, WEB_PORT = "127.0.0.1", 8080
-ids = (sys.argv[1] if len(sys.argv) > 1 else "30AE7BE844CF").upper().replace(" ", "").replace(":", "").replace("'", "").split(",")
+ids = parse_ids(sys.argv[1] if len(sys.argv) > 1 else _cfg.esn)
 rows, lock, status = [], threading.Lock(), "Connecting..."
 
 HTML = """<!DOCTYPE html>
@@ -129,8 +130,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
-user, password = load_credentials()
-client.username_pw_set(user, password)
+client.username_pw_set(_cfg.username, _cfg.password)
 client.on_connect = on_connect
 client.on_message = on_message
 client.connect(BROKER, PORT)
