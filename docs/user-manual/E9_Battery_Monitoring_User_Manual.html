@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>E9 Battery Monitoring — User Manual</title>
+<style>
+  :root {
+    --ink: #1a2330;
+    --muted: #5b6b7c;
+    --line: #d7dee6;
+    --bg: #f4f7fa;
+    --card: #ffffff;
+    --accent: #0e4a6b;
+    --ok: #1b7a45;
+    --warn: #9a6b00;
+    --bad: #b42318;
+    --info: #1763a6;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", Calibri, system-ui, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    line-height: 1.5;
+  }
+  .page { max-width: 980px; margin: 0 auto; padding: 32px 24px 64px; }
+  header.hero {
+    background: var(--accent);
+    color: #fff;
+    padding: 36px 28px;
+    border-radius: 10px;
+    margin-bottom: 28px;
+  }
+  header.hero p { margin: 8px 0 0; opacity: .9; }
+  h1 { margin: 0 0 8px; font-size: 1.85rem; font-weight: 650; }
+  h2 {
+    margin: 40px 0 12px;
+    padding-bottom: 6px;
+    border-bottom: 2px solid var(--accent);
+    color: var(--accent);
+    font-size: 1.35rem;
+  }
+  h3 { margin: 22px 0 8px; font-size: 1.08rem; }
+  p, li { font-size: 1rem; }
+  .muted { color: var(--muted); }
+  nav.toc {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 16px 22px;
+    margin-bottom: 28px;
+  }
+  nav.toc ol { margin: 8px 0 0; padding-left: 22px; }
+  nav.toc a { color: var(--accent); text-decoration: none; }
+  nav.toc a:hover { text-decoration: underline; }
+  figure {
+    margin: 16px 0 8px;
+    background: #07111c;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  figure img { display: block; width: 100%; height: auto; }
+  figcaption {
+    background: var(--card);
+    color: var(--muted);
+    font-size: .88rem;
+    padding: 8px 12px;
+    border-top: 1px solid var(--line);
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--card);
+    font-size: .95rem;
+    margin: 12px 0 18px;
+  }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: #e8eef3; }
+  code, kbd {
+    font-family: Consolas, "Cascadia Mono", monospace;
+    font-size: .88em;
+    background: #eef2f6;
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+  .callout {
+    border-left: 4px solid var(--accent);
+    background: #eaf3f8;
+    padding: 10px 14px;
+    margin: 14px 0;
+  }
+  .callout.warn { border-left-color: var(--warn); background: #fff7e6; }
+  .pill { display: inline-block; font-weight: 600; }
+  .ok { color: var(--ok); }
+  .warn { color: var(--warn); }
+  .bad { color: var(--bad); }
+  .info { color: var(--info); }
+  footer {
+    margin-top: 48px;
+    color: var(--muted);
+    font-size: .85rem;
+    border-top: 1px solid var(--line);
+    padding-top: 16px;
+  }
+  @media print {
+    body { background: #fff; }
+    .page { max-width: none; padding: 0; }
+    header.hero { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    a { color: inherit; }
+    nav.toc { break-after: page; }
+    figure { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+<header class="hero">
+  <div class="muted" style="color:#c5e4f3; letter-spacing:1px; font-size:.8rem;">USER MANUAL</div>
+  <h1>E9 Battery Monitoring</h1>
+  <p>How to open the dashboard, read each section, and act on what you see.</p>
+  <p>Live screenshots from 9 September 2026 · Gateway filter <code style="background:#0a3a55;color:#fff;">30AE7BE844CF</code></p>
+</header>
+
+<nav class="toc">
+  <strong>Contents</strong>
+  <ol>
+    <li><a href="#what">What this tool does</a></li>
+    <li><a href="#open">How to open it</a></li>
+    <li><a href="#overview">Dashboard at a glance</a></li>
+    <li><a href="#cards">Summary cards</a></li>
+    <li><a href="#anomaly">Anomaly details</a></li>
+    <li><a href="#chart">Battery level over time</a></li>
+    <li><a href="#macs">BLE MAC IDs</a></li>
+    <li><a href="#missing">Not reporting / not scanned</a></li>
+    <li><a href="#offline">Offline tracking</a></li>
+    <li><a href="#replace">Battery replacement detection</a></li>
+    <li><a href="#status">Status meanings</a></li>
+    <li><a href="#logs">What gets saved to disk</a></li>
+    <li><a href="#tips">Tips and troubleshooting</a></li>
+  </ol>
+</nav>
+
+<h2 id="what">1. What this tool does</h2>
+<p>E9 Battery Monitoring is a live web dashboard for Contigo E9 BLE tags. It listens to MQTT battery advertisements from the Dusun production farm, keeps tags that belong to a chosen gateway (CFC id), and shows battery %, online/offline state, dropouts, and suspected battery replacements.</p>
+<p>It does <strong>not</strong> control tags. It is a read-only monitor. Refresh is automatic (about once per second). You do not need to log in to the web page.</p>
+<div class="callout">
+  Typical use: open the page on a PC on the same network, leave it running, and watch for Offline, Low Battery, Anomaly, or frequent dropouts.
+</div>
+
+<h2 id="open">2. How to open it</h2>
+<ol>
+  <li>Confirm the application is running on the Linux (or Windows) host.</li>
+  <li>In a browser, go to <code>http://&lt;host-ip&gt;:8081</code>.</li>
+  <li>On the machine that runs the app, <code>http://127.0.0.1:8081</code> also works.</li>
+</ol>
+<p>Use <strong>http</strong>, not https. The default port is <strong>8081</strong>.</p>
+<p>MQTT username and password are read from <code>credentials.txt</code> in the application folder. They are not entered on the web page. To change them, edit that file and restart the app.</p>
+<p>Optional: start with a different gateway id:</p>
+<pre><code>./run_linux.sh 30AE7BE844CF
+./run_linux.sh 30AE7BE844CF,AABBCCDDEEFF</code></pre>
+
+<h2 id="overview">3. Dashboard at a glance</h2>
+<figure>
+  <img src="images/01-full-dashboard.png" alt="Full E9 Battery Monitoring dashboard">
+  <figcaption>Figure 1. Full dashboard. Status line: “Connected to Dusun Production farm | live MQTT”. This capture shows 29 tags, all online, all at 100%.</figcaption>
+</figure>
+<p>Read the page top to bottom:</p>
+<ol>
+  <li>Connection status and four summary counts</li>
+  <li>Anomaly table (after you click the red card)</li>
+  <li>Battery chart over time</li>
+  <li>Every tag’s MAC, battery, and status</li>
+  <li>Tags that should be reporting but are not</li>
+  <li>How often each tag has gone offline</li>
+  <li>Replacement funnel (0% → still empty → back to 100%)</li>
+</ol>
+
+<h2 id="cards">4. Summary cards</h2>
+<figure>
+  <img src="images/03-summary-cards.png" alt="Four summary cards: Total Tags, Online, Low Battery, Anomaly Detected">
+  <figcaption>Figure 2. Summary cards from the live farm: 29 total, 29 online, 0 low battery, 0 anomalies.</figcaption>
+</figure>
+<table>
+  <thead><tr><th>Card</th><th>Meaning</th><th>Example from this capture</th></tr></thead>
+  <tbody>
+    <tr><td><span class="pill info">Total Tags</span></td><td>How many distinct BLE MACs have sent a valid E9 battery frame since start (plus history reloaded from logs).</td><td>29</td></tr>
+    <tr><td><span class="pill ok">Online</span></td><td>Tags heard in the last <strong>60 seconds</strong>.</td><td>29 (all present)</td></tr>
+    <tr><td><span class="pill warn">Low Battery</span></td><td>Last reading below <strong>64%</strong>.</td><td>0</td></tr>
+    <tr><td><span class="pill bad">Anomaly Detected</span></td><td>Tags that dropped to 0%, dropped ≥30% in one sample, or jumped back to 100% (treated as a replacement). <strong>Click this card</strong> to open the detail table.</td><td>0 — click anyway to learn the empty state</td></tr>
+  </tbody>
+</table>
+<p>If Online is lower than Total Tags, one or more tags have not reported for over a minute. Check the BLE MAC table and Offline tracking next.</p>
+
+<h2 id="anomaly">5. Anomaly details</h2>
+<figure>
+  <img src="images/04-anomaly-details.png" alt="Anomaly details table, currently empty">
+  <figcaption>Figure 3. Anomaly details after clicking the red card. Empty is normal when batteries are stable at 100%.</figcaption>
+</figure>
+<p>This panel is hidden until you click <strong>Anomaly Detected</strong>. Click again (with no filter) to hide it. <strong>Show all</strong> clears a MAC or event-type filter.</p>
+<table>
+  <thead><tr><th>Column</th><th>What it shows</th></tr></thead>
+  <tbody>
+    <tr><td>when</td><td>Local time the jump was recorded</td></tr>
+    <tr><td>ble_addr</td><td>Tag MAC</td></tr>
+    <tr><td>previous / new</td><td>Battery % before and after the jump</td></tr>
+    <tr><td>cause</td><td>Why it was flagged</td></tr>
+  </tbody>
+</table>
+<p>Example rows you would see when something actually happens:</p>
+<table>
+  <thead><tr><th>when</th><th>ble_addr</th><th>previous</th><th>new</th><th>cause</th></tr></thead>
+  <tbody>
+    <tr><td>2026-09-09 10:47:53</td><td><code>C3:00:00:99:01:19</code></td><td>87%</td><td>0%</td><td>Dropped from 87% to 0%</td></tr>
+    <tr><td>2026-09-09 11:02:10</td><td><code>C3:00:00:99:01:A8</code></td><td>92%</td><td>40%</td><td>Sudden drop from 92% to 40% (≥30%)</td></tr>
+    <tr><td>2026-09-09 14:15:00</td><td><code>C3:00:00:99:01:1F</code></td><td>12%</td><td>100%</td><td>Returned to 100% from 12% (battery replacement)</td></tr>
+  </tbody>
+</table>
+<div class="callout warn">
+  Anomaly flags stay on that tag even after later “good” readings. That is intentional so a brief 0% event is not lost.
+</div>
+
+<h2 id="chart">6. Battery level over time</h2>
+<figure>
+  <img src="images/05-battery-chart.png" alt="Line chart of battery percent versus time">
+  <figcaption>Figure 4. Battery (%) vs time. Green = expected slow decline. Red = anomaly or replacement tag. Here every series is a flat 100% line from about 10:16 to 10:51.</figcaption>
+</figure>
+<p>The header of this panel also shows the current clock and how long the app has been running (uptime).</p>
+<ul>
+  <li><strong>Green line</strong> — normal. Battery should fall slowly over days, not bounce around.</li>
+  <li><strong>Red line</strong> — that MAC already had an anomaly or a replacement event.</li>
+  <li>A <strong>flat 100%</strong> line (this capture) means tags are full. You will not see drain until they leave 100%. Readings at 100% are shown here but are not appended to <code>batteryLevel.txt</code>.</li>
+</ul>
+
+<h2 id="macs">7. BLE MAC IDs</h2>
+<figure>
+  <img src="images/06-ble-mac-ids.png" alt="BLE MAC IDs table with status and duration">
+  <figcaption>Figure 5. Per-tag table. Scroll inside the table to see all 29 addresses.</figcaption>
+</figure>
+<table>
+  <thead><tr><th>Column</th><th>Meaning</th><th>Live example</th></tr></thead>
+  <tbody>
+    <tr><td>ble_addr</td><td>Tag Bluetooth address</td><td><code>C3:00:00:99:01:18</code></td></tr>
+    <tr><td>battery</td><td>Last parsed E9 battery %</td><td>100%</td></tr>
+    <tr><td>last seen</td><td>Time of last battery sample (clock time, not date)</td><td>10:55:25</td></tr>
+    <tr><td>status</td><td>OK, Low, Offline, Anomaly, or Replacement</td><td>OK</td></tr>
+    <tr><td>duration</td><td>How long it has been up or down in the current spell</td><td><code>up 20m 36s</code></td></tr>
+  </tbody>
+</table>
+<p>More examples from the same session:</p>
+<ul>
+  <li><code>C3:00:00:99:01:1A</code> — 100%, OK, <code>up 30m 18s</code> (longest uptime in the visible rows)</li>
+  <li><code>C3:00:00:99:01:19</code> — 100%, OK, <code>up 0s</code> (just came back after being offline)</li>
+  <li>Earlier the same morning, <code>C3:00:00:99:01:19</code> showed <strong>Offline</strong> and <code>down 1m 53s</code> when packets paused for over 60 seconds</li>
+</ul>
+<p>If status is Anomaly or Replacement, the row is clickable. Click it to filter Anomaly details to that MAC.</p>
+
+<h2 id="missing">8. Not reporting / not scanned</h2>
+<figure>
+  <img src="images/07-not-reporting.png" alt="Not reporting panel showing all tags reporting">
+  <figcaption>Figure 6. Healthy state: “All known tags are reporting” and 0 tags. This table only fills when something is late.</figcaption>
+</figure>
+<p>A tag appears here when the gateway still knows it, but a <strong>fresh battery frame</strong> has not arrived in the last 60 seconds.</p>
+<table>
+  <thead><tr><th>Reason</th><th>Meaning</th><th>What to check</th></tr></thead>
+  <tbody>
+    <tr><td class="warn">Can't be scanned</td><td>The tag is not in the current BLE scan list (out of range, sleeping, or RF issue).</td><td>Location, interference, tag powered?</td></tr>
+    <tr><td class="bad">Hasn't reported</td><td>The tag is scanned, but the E9 battery field did not parse.</td><td>Firmware / advertisement format, not just RF.</td></tr>
+  </tbody>
+</table>
+<p>Example from earlier the same day, when one tag dropped:</p>
+<table>
+  <thead><tr><th>ble_addr</th><th>last seen</th><th>age</th><th>last battery</th><th>reason</th></tr></thead>
+  <tbody>
+    <tr><td><code>C3:00:00:99:01:19</code></td><td>10:48:53</td><td>54s ago</td><td>100%</td><td>Can't be scanned</td></tr>
+  </tbody>
+</table>
+
+<h2 id="offline">9. Offline tracking</h2>
+<figure>
+  <img src="images/08-offline-tracking.png" alt="Offline tracking table with dropout frequency">
+  <figcaption>Figure 7. Header “0 offline · 29 tracked”. Green “online” is current state. The count columns are history, including past dropouts.</figcaption>
+</figure>
+<p>A gap only increments <strong>times offline &gt; 1 min</strong> if the tag stays quiet for at least 60 seconds. Short blips under a minute are ignored in that counter.</p>
+<table>
+  <thead><tr><th>Column</th><th>Meaning</th><th>Example</th></tr></thead>
+  <tbody>
+    <tr><td>ble_addr</td><td>Tag MAC</td><td><code>C3:00:00:99:01:18</code></td></tr>
+    <tr><td>offline since</td><td><span class="ok">online</span> or the timestamp it went down</td><td>online · or <code>2026-09-09 10:47:53</code></td></tr>
+    <tr><td>times offline &gt; 1 min</td><td>How many long dropouts since first seen</td><td>10</td></tr>
+    <tr><td>how often</td><td>Count, window, and average interval</td><td>10 times in 19h 46m 57s (avg every 1h 58m 41s)</td></tr>
+  </tbody>
+</table>
+<p>Use this to find <strong>flaky</strong> tags, not just tags that are down right now.</p>
+<ul>
+  <li><code>C3:00:00:99:01:18</code> — online, 10 long dropouts, about every 2 hours</li>
+  <li><code>C3:00:00:99:01:19</code> — online in this capture, but 15 long dropouts, about every 1h 19m (noisier than its neighbours)</li>
+</ul>
+<p>This table is written to <code>offline_tags.txt</code> and reloaded when the app starts, so history survives a restart.</p>
+
+<h2 id="replace">10. Battery replacement detection</h2>
+<figure>
+  <img src="images/09-replacement.png" alt="Four-step battery replacement detection funnel">
+  <figcaption>Figure 8. Replacement funnel. All zeros means no tag has hit 0% or jumped back to 100% in this session’s event log.</figcaption>
+</figure>
+<p>Read left to right. Click a step (except “Currently at 0%”) to open Anomaly details filtered to that event type.</p>
+<table>
+  <thead><tr><th>Step</th><th>Meaning</th><th>This capture</th></tr></thead>
+  <tbody>
+    <tr><td class="bad">Drop to 0%</td><td>How many times a tag fell from a positive % to 0%</td><td>0</td></tr>
+    <tr><td class="warn">Currently at 0%</td><td>How many tags’ <em>latest</em> reading is still 0%</td><td>0</td></tr>
+    <tr><td class="ok">Return to 100%</td><td>How many times a tag went from below 100% back to 100% (treated as a new battery)</td><td>0</td></tr>
+    <tr><td class="info">Event recorded</td><td>Total anomaly + replacement events. Click for the full audit list.</td><td>0</td></tr>
+  </tbody>
+</table>
+<p>Worked example of a real replacement sequence:</p>
+<ol>
+  <li>Tag reports 18% … 7% … then <strong>0%</strong> → Drop to 0% becomes 1, Currently at 0% becomes 1</li>
+  <li>Technician swaps the cell</li>
+  <li>Next frame is <strong>100%</strong> → Return to 100% becomes 1, Currently at 0% returns to 0, Event recorded increases</li>
+</ol>
+
+<h2 id="status">11. Status meanings</h2>
+<table>
+  <thead><tr><th>Status</th><th>When you see it</th></tr></thead>
+  <tbody>
+    <tr><td>OK</td><td>Heard in the last 60s, battery ≥ 64%, no anomaly flag</td></tr>
+    <tr><td>Low</td><td>Heard recently, battery &lt; 64%</td></tr>
+    <tr><td>Offline</td><td>No battery sample for more than 60s</td></tr>
+    <tr><td>Anomaly</td><td>Had a drop to 0% or a ≥30% drop</td></tr>
+    <tr><td>Replacement</td><td>Had a jump back to 100%</td></tr>
+  </tbody>
+</table>
+<p>The top status line should stay <strong>Connected to Dusun Production farm | live MQTT</strong>. If it stays on Connecting, or the page never leaves “Loading…”, MQTT is not up (broker, network, or <code>credentials.txt</code>).</p>
+
+<h2 id="logs">12. What gets saved to disk</h2>
+<p>Files sit in the application folder (same place as <code>main.py</code>). Open them in Excel or a text editor. Columns are tab-separated.</p>
+<table>
+  <thead><tr><th>File</th><th>When it is written</th><th>What is in each line</th></tr></thead>
+  <tbody>
+    <tr><td><code>batteryLevel.txt</code></td><td>Every parsed reading <strong>below 100%</strong></td><td>time, MAC, raw hex advertisement, battery %</td></tr>
+    <tr><td><code>anomalyEvents.txt</code></td><td>Drop to 0%, sudden ≥30% drop, or return to 100%</td><td>time, MAC, previous %, new %, kind, reason, raw hex</td></tr>
+    <tr><td><code>offline_tags.txt</code></td><td>Whenever online/offline state changes</td><td>MAC, offline-since or “online”, long-dropout count, how often, last seen, first seen, offline event count</td></tr>
+  </tbody>
+</table>
+<p>The web page itself is not a log. HTTP access is not written. MQTT passwords are not written to these files.</p>
+
+<h2 id="tips">13. Tips and troubleshooting</h2>
+<ul>
+  <li><strong>Page loads but counts stay 0</strong> — MQTT connected but no messages match the CFC/gateway id. Confirm the id you started with (default <code>30AE7BE844CF</code>).</li>
+  <li><strong>Cannot open from another PC</strong> — use the Linux host IP and port 8081. If the app was bound only to 127.0.0.1, restart with <code>E9_WEB_HOST=0.0.0.0</code>. Firewall may still block 8081.</li>
+  <li><strong>Chart.js fails to draw</strong> — the page loads Chart.js from the internet. A machine with no outbound web access will show tables but a blank chart.</li>
+  <li><strong>Numbers look old after restart</strong> — expected. Battery history, anomalies, and offline counts reload from the three text files.</li>
+  <li><strong>One tag keeps appearing in Offline tracking</strong> — that is a coverage or hardware issue, not a dashboard bug. Compare its “avg every …” to neighbouring MACs. In this capture, <code>C3:00:00:99:01:19</code> dropped more often than <code>…:18</code>.</li>
+</ul>
+<div class="callout">
+  Print or share this file: File → Print (PDF), or copy the whole <code>docs/user-manual</code> folder. Keep the <code>images</code> folder next to this HTML file so pictures still display.
+</div>
+
+<footer>
+  E9 Battery Monitoring user manual · screenshots from the live dashboard on 9 September 2026 · port 8081 · MQTT topic /cell/#
+</footer>
+</div>
+</body>
+</html>

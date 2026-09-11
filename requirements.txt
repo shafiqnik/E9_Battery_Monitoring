@@ -1,1 +1,2 @@
 paho-mqtt>=2.0.0,<3
+scikit-learn>=1.3

@@ -135,7 +135,7 @@ free_port() {
 activate_venv() {
   local activate="$ROOT/venv/bin/activate"
   if [ ! -f "$activate" ] || [ ! -x "$ROOT/venv/bin/python" ]; then
-    echo "ERROR: virtualenv missing at ${ROOT}/venv. Run ./install_centos8.sh first." >&2
+    echo "ERROR: virtualenv missing at ${ROOT}/venv. Run ./install_linux.sh first." >&2
     exit 1
   fi
   # shellcheck disable=SC1090
@@ -155,7 +155,7 @@ PYMAJ="$(python -c 'import sys; print(sys.version_info[0])')"
 PYMIN="$(python -c 'import sys; print(sys.version_info[1])')"
 if [ "$PYMAJ" -lt 3 ] || [ "$PYMIN" -lt 7 ]; then
   echo "ERROR: Python ${PYVER} is too old (need 3.7+; CentOS 8 default 3.6 will fail)." >&2
-  echo "Run ./install_centos8.sh to install Python 3.8 and a virtualenv." >&2
+  echo "Run ./install_linux.sh to create a Python 3.7+ virtualenv." >&2
   exit 1
 fi
 
