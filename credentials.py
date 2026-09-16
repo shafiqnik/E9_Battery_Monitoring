@@ -10,7 +10,7 @@ DEFAULTS = {
     "topic": "/cell/#",
     "esn": "344CF",
     "vecima": "564D41",
-    "header": "EA1",
+    "header": "0EA1",
 }
 
 _ALIASES = {

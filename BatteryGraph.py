@@ -26,6 +26,12 @@ ONLINE_SEC = 60
 OFFLINE_MIN_SEC = 60
 ids = list(_cfg.ids)
 
+# BLE beacon whose raw MQTT messages are surfaced on the dashboard, whenever seen.
+TARGET_BEACON = "C3:00:00:61:FD:40"
+TARGET_BEACON_KEY = TARGET_BEACON.replace(":", "").upper()
+BEACON_HITS_MAX = 200
+beacon_hits = []
+
 lock = threading.Lock()
 status = "Connecting..."
 started = time.monotonic()
@@ -150,6 +156,17 @@ code { font-family: Consolas, monospace; }
 </div>
 <div class="panel">
   <div class="panel-head">
+    <h2>BLE BEACON WATCH</h2>
+    <div class="clock">Target: <code id="beacon-mac">C3:00:00:61:FD:40</code></div>
+  </div>
+  <p class="meta" id="beacon-empty">No MQTT messages seen yet for this beacon.</p>
+  <div class="table-box"><table>
+    <thead><tr><th>when</th><th>topic</th><th>raw message</th></tr></thead>
+    <tbody id="beacon-rows"></tbody>
+  </table></div>
+</div>
+<div class="panel">
+  <div class="panel-head">
     <h2>NOT REPORTING / NOT SCANNED</h2>
     <div class="clock"><span id="missing-count">0 tags</span></div>
   </div>
@@ -259,6 +276,13 @@ async function refresh(){
     const downNow = t.offline_since !== 'online';
     return '<tr><td><code>'+esc(t.ble_addr)+'</code></td><td class="'+(downNow?'bad':'ok')+'">'+esc(t.offline_since)+'</td><td>'+t.times_over_1min+'</td><td>'+esc(t.how_often)+'</td></tr>';
   }).join('');
+  const beacon = d.beacon_watch || {};
+  document.getElementById('beacon-mac').textContent = beacon.mac || '';
+  const bhits = beacon.hits || [];
+  document.getElementById('beacon-empty').hidden = bhits.length > 0;
+  document.getElementById('beacon-rows').innerHTML = bhits.map(h =>
+    '<tr><td>'+esc(h.when)+'</td><td>'+esc(h.topic || '')+'</td><td><code>'+esc(h.raw)+'</code></td></tr>'
+  ).join('');
   const pred = d.predict || {};
   const livePred = pred.live || [];
   const riskN = livePred.filter(r => r.predicted_status !== 'Normal').length;
@@ -730,6 +754,10 @@ def snapshot():
             "recorded": len(anomaly_events),
         },
         "predict": predictor.dashboard_state(now) if predictor else {},
+        "beacon_watch": {
+            "mac": TARGET_BEACON,
+            "hits": list(reversed(beacon_hits[-50:])),
+        },
     }
 
 
@@ -748,6 +776,15 @@ def log_battery(ble_addr, data, battery):
 
 def on_message(client, userdata, msg):
     payload = msg.payload.decode(errors="replace")
+    if TARGET_BEACON_KEY in payload.upper().replace(":", ""):
+        with lock:
+            beacon_hits.append({
+                "when": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "topic": msg.topic,
+                "raw": payload,
+            })
+            if len(beacon_hits) > BEACON_HITS_MAX:
+                del beacon_hits[: len(beacon_hits) - BEACON_HITS_MAX]
     if not any(i in payload.upper().replace(":", "") for i in ids if i):
         return
     try:
